@@ -22,7 +22,7 @@ from flask.ext.babelpkg import lazy_gettext as _
 from markdown import markdown
 from pandas.io.json import dumps
 from six import string_types
-from werkzeug.datastructures import ImmutableMultiDict
+from werkzeug.datastructures import ImmutableMultiDict, MultiDict
 from werkzeug.urls import Href
 from dateutil import relativedelta as rdelta
 
@@ -106,6 +106,8 @@ class BaseViz(object):
 
     def get_url(self, **kwargs):
         """Returns the URL for the viz"""
+        import pdb; pdb.set_trace()  # breakpoint a0598da2 //
+
         d = self.orig_form_data.copy()
         if 'json' in d:
             del d['json']
@@ -113,12 +115,13 @@ class BaseViz(object):
             del d['action']
         d.update(kwargs)
         # Remove unchecked checkboxes because HTML is weird like that
-        od = OrderedDict()
+        od = MultiDict()
         for key in sorted(d.keys()):
             if d[key] is False:
                 del d[key]
             else:
-                od[key] = d[key]
+                for v in d.getlist(key):
+                    od.add(key, v)
         href = Href(
             '/caravel/explore/{self.datasource.type}/'
             '{self.datasource.id}/'.format(**locals()))

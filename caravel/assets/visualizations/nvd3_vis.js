@@ -10,14 +10,13 @@ require('./nvd3_vis.css');
 
 function nvd3Vis(slice) {
   var chart;
+  var colorKey = 'key';
 
   var render = function () {
     $.getJSON(slice.jsonEndpoint(), function (payload) {
         var fd = payload.form_data;
         var viz_type = fd.viz_type;
-
         var f = d3.format('.3s');
-        var colorKey = 'key';
 
         nv.addGraph(function () {
           if (!chart) {
@@ -150,7 +149,7 @@ function nvd3Vis(slice) {
             chart.useInteractiveGuideline(true);
           }
           if (fd.y_axis_zero) {
-            chart.forceY([0, 1]);
+            chart.forceY([0]);
           } else if (fd.y_log_scale) {
             chart.yScale(d3.scale.log());
           }
@@ -196,7 +195,6 @@ function nvd3Vis(slice) {
               chart.y2Axis.tickFormat(d3.format(fd.y_axis_format));
             }
           }
-
           chart.color(function (d, i) {
             return px.color.category21(d[colorKey]);
           });

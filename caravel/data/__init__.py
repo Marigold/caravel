@@ -8,9 +8,11 @@ import gzip
 import json
 import os
 import textwrap
+import datetime
+import random
 
 import pandas as pd
-from sqlalchemy import String, DateTime, Float
+from sqlalchemy import String, DateTime, Date, Float
 
 from caravel import app, db, models, utils
 
@@ -373,7 +375,8 @@ def load_world_bank_health_n_pop():
 
     print("Creating a World's Health Bank dashboard")
     dash_name = "World's Bank Data"
-    dash = db.session.query(Dash).filter_by(dashboard_title=dash_name).first()
+    slug = "world_health"
+    dash = db.session.query(Dash).filter_by(slug=slug).first()
 
     if not dash:
         dash = Dash()
@@ -457,7 +460,7 @@ def load_world_bank_health_n_pop():
 
     dash.dashboard_title = dash_name
     dash.position_json = json.dumps(l, indent=4)
-    dash.slug = "world_health"
+    dash.slug = slug
 
     dash.slices = slices[:-1]
     db.session.merge(dash)
@@ -473,14 +476,14 @@ def load_css_templates():
     if not obj:
         obj = CSS(template_name="Flat")
     css = textwrap.dedent("""\
-    .gridster li.widget {
+    .gridster div.widget {
         transition: background-color 0.5s ease;
         background-color: #FAFAFA;
         border: 1px solid #CCC;
         box-shadow: none;
         border-radius: 0px;
     }
-    .gridster li.widget:hover {
+    .gridster div.widget:hover {
         border: 1px solid #000;
         background-color: #EAEAEA;
     }
@@ -513,7 +516,7 @@ def load_css_templates():
     if not obj:
         obj = CSS(template_name="Courier Black")
     css = textwrap.dedent("""\
-    .gridster li.widget {
+    .gridster div.widget {
         transition: background-color 0.5s ease;
         background-color: #EEE;
         border: 2px solid #444;
@@ -527,7 +530,7 @@ def load_css_templates():
     .navbar {
         box-shadow: none;
     }
-    .gridster li.widget:hover {
+    .gridster div.widget:hover {
         border: 2px solid #000;
         background-color: #EAEAEA;
     }
@@ -808,3 +811,142 @@ def load_birth_names():
     dash.slices = slices[:-1]
     db.session.merge(dash)
     db.session.commit()
+
+
+def load_unicode_test_data():
+    """Loading unicode test dataset from a csv file in the repo"""
+    df = pd.read_csv(os.path.join(DATA_FOLDER, 'unicode_utf8_unixnl_test.csv'),
+                     encoding="utf-8")
+    # generate date/numeric data
+    df['date'] = datetime.datetime.now().date()
+    df['value'] = [random.randint(1, 100) for _ in range(len(df))]
+    df.to_sql(
+        'unicode_test',
+        db.engine,
+        if_exists='replace',
+        chunksize=500,
+        dtype={
+            'phrase': String(500),
+            'short_phrase': String(10),
+            'with_missing': String(100),
+            'date': Date(),
+            'value': Float(),
+        },
+        index=False)
+    print("Done loading table!")
+    print("-" * 80)
+
+    print("Creating table reference")
+    obj = db.session.query(TBL).filter_by(table_name='unicode_test').first()
+    if not obj:
+        obj = TBL(table_name='unicode_test')
+    obj.main_dttm_col = 'date'
+    obj.database = get_or_create_db(db.session)
+    obj.is_featured = False
+    db.session.merge(obj)
+    db.session.commit()
+    obj.fetch_metadata()
+    tbl = obj
+
+    slice_data = {
+        "datasource_id": "3",
+        "datasource_name": "unicode_test",
+        "datasource_type": "table",
+        "flt_op_1": "in",
+        "granularity": "date",
+        "groupby": [],
+        "metric": 'sum__value',
+        "row_limit": config.get("ROW_LIMIT"),
+        "since": "100 years ago",
+        "until": "now",
+        "where": "",
+        "viz_type": "word_cloud",
+        "size_from": "10",
+        "series": "short_phrase",
+        "size_to": "70",
+        "rotation": "square",
+        "limit": "100",
+    }
+
+    print("Creating a slice")
+    slc = Slice(
+        slice_name="Unicode Cloud",
+        viz_type='word_cloud',
+        datasource_type='table',
+        table=tbl,
+        params=get_slice_json(slice_data),
+    )
+    merge_slice(slc)
+
+    print("Creating a dashboard")
+    dash = db.session.query(Dash).filter_by(dashboard_title="Unicode Test").first()
+
+    if not dash:
+        dash = Dash()
+    pos = {
+        "size_y": 4,
+        "size_x": 4,
+        "col": 1,
+        "row": 1,
+        "slice_id": slc.id,
+    }
+    dash.dashboard_title = "Unicode Test"
+    dash.position_json = json.dumps([pos], indent=4)
+    dash.slug = "unicode-test"
+    dash.slices = [slc]
+    db.session.merge(dash)
+    db.session.commit()
+
+
+def load_random_time_series_data():
+    """Loading random time series data from a zip file in the repo"""
+    with gzip.open(os.path.join(DATA_FOLDER, 'random_time_series.json.gz')) as f:
+        pdf = pd.read_json(f)
+    pdf.ds = pd.to_datetime(pdf.ds, unit='s')
+    pdf.to_sql(
+        'random_time_series',
+        db.engine,
+        if_exists='replace',
+        chunksize=500,
+        dtype={
+            'ds': DateTime,
+        },
+        index=False)
+    print("Done loading table!")
+    print("-" * 80)
+
+    print("Creating table reference")
+    obj = db.session.query(TBL).filter_by(table_name='random_time_series').first()
+    if not obj:
+        obj = TBL(table_name='random_time_series')
+    obj.main_dttm_col = 'ds'
+    obj.database = get_or_create_db(db.session)
+    obj.is_featured = False
+    db.session.merge(obj)
+    db.session.commit()
+    obj.fetch_metadata()
+    tbl = obj
+
+    slice_data = {
+        "datasource_id": "6",
+        "datasource_name": "random_time_series",
+        "datasource_type": "table",
+        "granularity": "day",
+        "row_limit": config.get("ROW_LIMIT"),
+        "since": "1 year ago",
+        "until": "now",
+        "where": "",
+        "viz_type": "cal_heatmap",
+        "domain_granularity": "month",
+        "subdomain_granularity": "day",
+    }
+
+    print("Creating a slice")
+    slc = Slice(
+        slice_name="Calendar Heatmap",
+        viz_type='cal_heatmap',
+        datasource_type='table',
+        table=tbl,
+        params=get_slice_json(slice_data),
+    )
+    merge_slice(slc)

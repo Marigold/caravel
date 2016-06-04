@@ -93,6 +93,15 @@ AUTH_TYPE = AUTH_DB
 #    { 'name': 'AOL', 'url': 'http://openid.aol.com/<username>' },
 #    { 'name': 'Flickr', 'url': 'http://www.flickr.com/<username>' },
 #    { 'name': 'MyOpenID', 'url': 'https://www.myopenid.com' }]
+
+# ---------------------------------------------------
+# Roles config
+# ---------------------------------------------------
+# Grant public role the same set of permissions as for the GAMMA role.
+# This is useful if one wants to enable anonymous users to view
+# dashboards. Explicit grant on specific datasets is still required.
+PUBLIC_ROLE_LIKE_GAMMA = False
+
 # ---------------------------------------------------
 # Babel config for translations
 # ---------------------------------------------------
@@ -123,6 +132,10 @@ IMG_UPLOAD_URL = '/static/uploads/'
 CACHE_DEFAULT_TIMEOUT = None
 CACHE_CONFIG = {'CACHE_TYPE': 'null'}
 
+# CORS Options
+ENABLE_CORS = False
+CORS_OPTIONS = {}
+
 
 # ---------------------------------------------------
 # List of viz_types not allowed in your environment
@@ -131,6 +144,12 @@ CACHE_CONFIG = {'CACHE_TYPE': 'null'}
 # ---------------------------------------------------
 
 VIZ_TYPE_BLACKLIST = []
+
+# ---------------------------------------------------
+# List of data sources not to be refreshed in druid cluster
+# ---------------------------------------------------
+
+DRUID_DATA_SOURCE_BLACKLIST = []
 
 """
 1) http://docs.python-guide.org/en/latest/writing/logging/
@@ -157,7 +176,7 @@ BACKUP_COUNT = 30
 
 try:
     from caravel_config import *  # noqa
-except Exception:
+except ImportError:
     pass
 
 if not CACHE_DEFAULT_TIMEOUT:

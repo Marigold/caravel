@@ -7,14 +7,25 @@ from __future__ import unicode_literals
 import functools
 import json
 import logging
+import numpy
 from datetime import datetime
 
 import parsedatetime
+import sqlalchemy as sa
 from dateutil.parser import parse
+from alembic import op
 from flask import flash, Markup
 from flask_appbuilder.security.sqla import models as ab_models
 from markdown import markdown as md
 from sqlalchemy.types import TypeDecorator, TEXT
+
+
+class CaravelException(Exception):
+    pass
+
+
+class CaravelSecurityException(CaravelException):
+    pass
 
 
 def flasher(msg, severity=None):
@@ -154,6 +165,7 @@ def init(caravel):
     sm = caravel.appbuilder.sm
     alpha = sm.add_role("Alpha")
     admin = sm.add_role("Admin")
+    config = caravel.app.config
 
     merge_perm(sm, 'all_datasource_access', 'all_datasource_access')
 
@@ -167,24 +179,28 @@ def init(caravel):
             sm.add_permission_role(alpha, perm)
         sm.add_permission_role(admin, perm)
     gamma = sm.add_role("Gamma")
+    public_role = sm.find_role("Public")
+    public_role_like_gamma = \
+        public_role and config.get('PUBLIC_ROLE_LIKE_GAMMA', False)
     for perm in perms:
-        if(
-                perm.view_menu and perm.view_menu.name not in (
-                    'ResetPasswordView',
-                    'RoleModelView',
-                    'UserDBModelView',
-                    'Security') and
-                perm.permission.name not in (
-                    'all_datasource_access',
-                    'can_add',
-                    'can_download',
-                    'can_delete',
-                    'can_edit',
-                    'can_save',
-                    'datasource_access',
-                    'muldelete',
-                )):
+        if (perm.view_menu and perm.view_menu.name not in (
+                'ResetPasswordView',
+                'RoleModelView',
+                'UserDBModelView',
+                'Security') and
+            perm.permission.name not in (
+                'all_datasource_access',
+                'can_add',
+                'can_download',
+                'can_delete',
+                'can_edit',
+                'can_save',
+                'datasource_access',
+                'muldelete',
+            )):
             sm.add_permission_role(gamma, perm)
+            if public_role_like_gamma:
+                sm.add_permission_role(public_role, perm)
     session = db.session()
     table_perms = [
         table.perm for table in session.query(models.SqlaTable).all()]
@@ -216,6 +232,12 @@ def json_iso_dttm_ser(obj):
     """
     if isinstance(obj, datetime):
         obj = obj.isoformat()
+    elif isinstance(obj, numpy.int64):
+        obj = int(obj)
+    else:
+        raise TypeError(
+             "Unserializable object {} of type {}".format(obj, type(obj))
+        )
     return obj
 
 
@@ -235,3 +257,18 @@ def readfile(filepath):
     with open(filepath) as f:
         content = f.read()
     return content
+
+
+def generic_find_constraint_name(table, columns, referenced):
+    """
+    Utility to find a constraint name in alembic migrations
+    """
+    engine = op.get_bind().engine
+    m = sa.MetaData({})
+    t = sa.Table(table, m, autoload=True, autoload_with=engine)
+
+    for fk in t.foreign_key_constraints:
+        if fk.referred_table.name == referenced and \
+            set(fk.column_keys) == columns:
+            return fk.name
+    return None
